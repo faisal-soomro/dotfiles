@@ -24,5 +24,6 @@ alias kd="kubectl describe"
 alias kx="kubectx"
 alias kn="kubens"
 
-# docker aliases
-# 
+# docker aliases, make sure to install docker first or any other container engine which use docker client
+alias gcloud_from_here='docker run --rm -v ~/.config/gcloud:/root/.config/gcloud -v "$(pwd)":/mnt/folder -it google/cloud-sdk /bin/bash'
+alias terraform_from_here='docker run --rm -v ~/.config/gcloud:/root/.config/gcloud -v "$(pwd)":/mnt/folder -it --entrypoint=/bin/sh hashicorp/terraform:1.10'
