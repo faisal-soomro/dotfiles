@@ -13,3 +13,16 @@ PS1+=">> "                                   # end prompt
 export PS1;
 export CLICOLOR=1
 export LSCOLORS=ExFxBxDxCxegedabagacad
+
+
+# Kubernetes aliases
+alias k="kubectl"
+alias kg="kubectl get"
+alias kd="kubectl describe"
+
+# kubectx aliases, install kubectx first (github: https://github.com/ahmetb/kubectx)
+alias kx="kubectx"
+alias kn="kubens"
+
+# docker aliases
+# 
