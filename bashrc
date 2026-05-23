@@ -27,3 +27,6 @@ alias kn="kubens"
 # docker aliases, make sure to install docker first or any other container engine which use docker client
 alias gcloud_from_here='docker run --rm -v ~/.config/gcloud:/root/.config/gcloud -v "$(pwd)":/mnt/folder -it google/cloud-sdk /bin/bash'
 alias terraform_from_here='docker run --rm -v ~/.config/gcloud:/root/.config/gcloud -v "$(pwd)":/mnt/folder -it --entrypoint=/bin/sh hashicorp/terraform:1.10'
+
+# Claude Code sandbox — see claude_sandbox/RESEARCH.md
+[ -f "$HOME/dev_workspace/dotfiles/claude_sandbox/aliases.sh" ] && source "$HOME/dev_workspace/dotfiles/claude_sandbox/aliases.sh"
