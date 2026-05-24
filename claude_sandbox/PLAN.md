@@ -88,56 +88,116 @@ If any of #5-#11 fail we stop and fix before continuing.
 
 ---
 
-## Stage 2 — devcontainer layer on top
+## Stage 2 — team rollout
 
-Once Stage 1 is solid, add a `.devcontainer/devcontainer.json` template that targets the **same image** and the **same host bind-mounts** so VS Code "Reopen in Container" lands in an identical environment to the terminal alias.
+Stage 1 served a single developer. Stage 2 widens the audience to other Catenda developers, who pick one of two entry points depending on workflow:
 
-### Build
+| Track | Best for | Entry point |
+|---|---|---|
+| **A. Terminal alias** (`claude_from_here`) | CLI-first devs; lowest friction | `aliases.sh` from this repo |
+| **B. Devcontainer** (per-repo `.devcontainer/devcontainer.json`) | IDE-first devs (VS Code, IntelliJ Ultimate, Cursor) | Reference shape below, copy-pasted into each project |
 
-| File | Purpose |
+Both tracks converge on the same end state: Claude Code running in a container as the host UID, with auth in `~/.claude/`. Different ergonomics, same security envelope.
+
+### Why two tracks
+
+A single artifact can't serve both audiences cleanly:
+
+| | Track A (alias) | Track B (devcontainer) |
+|---|---|---|
+| Granularity | Process per `cd && claude_from_here` invocation | Long-lived container per repo |
+| IDE integration | None — terminal only | Extension panel, diff viewer, diagnostic sharing |
+| Setup cost per dev | Clone dotfiles + build image once → use anywhere | Drop `.devcontainer/` into each repo |
+| Image | Catenda-maintained (`claude-sandbox`, this dir) | Anthropic-maintained (Dev Container Feature) |
+| Anthropic-blessed posture | ❌ deviates on `~/.ssh`, host-bind for `~/.claude` | ✅ matches Anthropic's reference |
+| Auth persistence | Host `~/.claude.json` bind-mount | Named volume per project |
+
+Track A is faster onboarding and cheaper to support. Track B is IDE-native and easier for new devs to discover via the "Reopen in Container" prompt. We ship both.
+
+### Track A — team alias rollout
+
+The Stage 1 alias is mostly portable already. Three things differ from "personal use":
+
+| Item | Action for team |
 |---|---|
-| `devcontainer.json.template` | Reusable template engineers drop into any repo. Points at the `claude-sandbox` image, bind-mounts `~/.claude.json` and `~/.claude/` from host, runs as host UID. |
-| `README.md` (update) | One-line install + how to drop the template into a repo. |
+| `~/dev_workspace/personal-wiki` mount | Remove from the team `aliases.sh`. Devs who use octo/wiki can re-add locally in their own dotfiles fork. |
+| `~/.ssh:ro` mount | Keep, but document it explicitly. Anthropic warns against it; each dev should accept the trade-off knowingly. Provide a commented-out variant for opt-out. |
+| `HOST_HOME` default | Make `docker build` fail loudly when `--build-arg HOST_HOME` is missing — no silent fall-back to `/home/me`. |
 
-Template shape (subject to refinement during Stage 2):
+Rollout instructions (what each dev does):
+
+```bash
+# 1. Clone the dotfiles repo
+git clone <catenda-dotfiles-url> ~/dev_workspace/dotfiles
+
+# 2. Build the sandbox image (one-time, ~3min first run)
+docker build --build-arg HOST_HOME="$HOME" \
+  -t claude-sandbox ~/dev_workspace/dotfiles/claude_sandbox/
+
+# 3. Source the alias from your shell rc (~/.zshrc or ~/.bashrc)
+echo '[ -f "$HOME/dev_workspace/dotfiles/claude_sandbox/aliases.sh" ] && \
+  source "$HOME/dev_workspace/dotfiles/claude_sandbox/aliases.sh"' >> ~/.zshrc
+
+# 4. Reload the shell
+exec zsh -l
+
+# 5. Use it
+cd <any repo>
+claude_from_here
+```
+
+First run prompts for sign-in (browser). Auth persists on host in `~/.claude.json`.
+
+### Track B — devcontainer reference
+
+Per-project. Each Catenda project that wants IDE integration drops the following `devcontainer.json` into its repo root under `.devcontainer/`. Uses Anthropic's official Dev Container Feature on a Microsoft-maintained base image — no custom Dockerfile to maintain.
 
 ```json
 {
-  "name": "claude-sandbox",
-  "image": "claude-sandbox:latest",
-  "workspaceFolder": "/mnt/folder",
-  "workspaceMount": "source=${localWorkspaceFolder},target=/mnt/folder,type=bind",
+  "name": "claude-code",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {},
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1": {}
+  },
   "mounts": [
-    "source=${localEnv:HOME}/.claude.json,target=${localEnv:HOME}/.claude.json,type=bind",
-    "source=${localEnv:HOME}/.claude,target=${localEnv:HOME}/.claude,type=bind"
+    "source=claude-code-config-${devcontainerId},target=/home/vscode/.claude,type=volume"
   ],
-  "updateRemoteUserUID": true
+  "customizations": {
+    "vscode": { "extensions": ["anthropic.claude-code"] }
+  }
 }
 ```
 
-(HOME is baked into the image at build time via `--build-arg HOST_HOME="$HOME"` — see Stage 1 Build — so no `containerEnv` override is needed and the bind targets mirror the host paths.)
+Why this shape:
 
-### Step-by-step build order
+- **Microsoft base image** ships a `vscode` user, sudo, git, common tools — solves the user-identity problem without us writing a Dockerfile.
+- **Node feature** is required: the Claude Code feature shells out to `npm` to install the CLI, and `mcr.microsoft.com/devcontainers/base:ubuntu` doesn't bundle Node.
+- **Named volume** at `~/.claude` persists auth/settings across rebuilds. Per-project isolation via `${devcontainerId}` — change to a fixed name (e.g. `claude-code-config`) to share auth across projects.
+- **No `~/.ssh` mount** by design — Anthropic recommends repo-scoped tokens. Add one only when a specific project actually needs SSH for git inside the container.
+- **No `customizations.jetbrains.plugins` entry** — the official Claude Code JetBrains plugin is still Beta and its dotted bundle ID isn't published. IntelliJ devs install it manually once per dev container.
 
-1. Author `devcontainer.json.template` → drop it as `.devcontainer/devcontainer.json` into `trading-journal` (smallest, lowest-stakes repo)
-2. Open `trading-journal` in VS Code → run **Dev Containers: Reopen in Container** → confirm container starts and VS Code attaches
-3. Open VS Code's integrated terminal → run `claude` → confirm it works without re-login (auth volume shared with Stage 1's terminal use)
-4. Edit a file in VS Code → confirm host filesystem reflects it
-5. Close VS Code container → reopen → confirm state retained
-6. Repeat 1-5 in a second repo to validate the template is portable
+Per-IDE setup:
+
+| IDE | Setup |
+|---|---|
+| VS Code / Cursor / Windsurf | Install the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) → open the repo → accept the "Reopen in Container" prompt. First time pulls the base image (~2min). The Claude Code extension auto-installs via `customizations.vscode.extensions`. |
+| IntelliJ Ultimate / PyCharm Pro / WebStorm / GoLand | Dev Containers plugin is bundled. **File → Remote Development → Dev Containers → New Dev Container → From local project**, point at the repo's `.devcontainer/devcontainer.json`. Once attached, install the [Claude Code Beta plugin](https://plugins.jetbrains.com/plugin/27310-claude-code-beta-) inside the dev container. Plugin shells out to `claude` on PATH (already installed by the Feature). |
+| IntelliJ Community editions | Dev Containers plugin is not bundled. Either upgrade to a paid edition or use Track A. |
 
 ### Stage 2 acceptance criteria
 
-| # | Criterion | How to test |
-|---|---|---|
-| 1 | Template drops cleanly into a fresh repo | Copy file in, no edits needed |
-| 2 | VS Code "Reopen in Container" succeeds | Status bar shows the devcontainer name, no errors |
-| 3 | `claude` available inside VS Code terminal | `which claude` returns a path, `claude --version` runs |
-| 4 | Auth shared with terminal alias | Already logged in on first VS Code launch (host `~/.claude.json` is the same file the terminal alias used) |
-| 5 | Edits persist to host | Save a file in VS Code; host shows the change |
-| 6 | Container survives VS Code close → reopen | State (installed packages, terminal history) intact unless rebuild was explicit |
-| 7 | Cursor "Reopen in Container" also works | Same template, second editor — confirms portability |
-| 8 | Pip/npm-g still don't leak to host | Same test as Stage 1 #7-#8, but via VS Code terminal |
+| # | Criterion | How to test | Status |
+|---|---|---|---|
+| 1 | Team alias drops the `personal-wiki` mount | `aliases.sh` (team copy) contains no `dev_workspace/personal-wiki` line | ⬜ |
+| 2 | Team alias build fails loudly without `HOST_HOME` | `docker build .` (no `--build-arg`) → error referencing `HOST_HOME` | ⬜ |
+| 3 | Devcontainer reference builds clean | **Dev Containers: Rebuild Container** in `trading-journal` exits 0 | ⬜ |
+| 4 | `claude` works in VS Code integrated terminal of devcontainer | `claude --version` returns version inside the container | ⬜ |
+| 5 | Claude Code VS Code extension works inside devcontainer | Spark icon visible in Activity Bar, sign-in flow completes | ⬜ |
+| 6 | Auth persists across `Rebuild Container` | Sign in once, rebuild, second open doesn't reprompt | ⬜ |
+| 7 | Devcontainer flow works in IntelliJ Ultimate | New Dev Container from `.devcontainer/devcontainer.json` attaches, integrated terminal `claude` works | ⬜ |
+| 8 | Claude Code JetBrains plugin works inside devcontainer | Plugin installed in-container, `Cmd+Esc` opens Claude, plugin reports the in-container `claude` binary | ⬜ |
+| 9 | Rollout doc reviewed by a second Catenda dev | One teammate follows Track A or Track B from scratch; capture any friction in a follow-up | ⬜ |
 
 ---
 
