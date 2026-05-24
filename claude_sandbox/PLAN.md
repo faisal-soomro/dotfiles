@@ -14,19 +14,29 @@ Smallest viable sandbox. A Dockerfile and a single bash alias. No CLI wrapper.
 
 | File | Purpose |
 |---|---|
-| `Dockerfile` | Ubuntu base + node + `@anthropic-ai/claude-code` + `openssh-client`. **No baked-in user.** World-writable `/home/me` so the container can run as any host UID. npm prefix in HOME so runtime `npm i -g` has somewhere to land. |
-| `aliases.sh` | One alias: `claude_from_here` that runs Claude as the host UID/GID against the current directory, bind-mounting `~/.claude.json`, `~/.claude/`, and `~/.ssh:ro` from host. |
+| `Dockerfile` | Ubuntu base + node + `@anthropic-ai/claude-code` + `openssh-client` + `jq`. **No baked-in user.** Takes a `HOST_HOME` build arg, creates that path as a world-writable HOME, sets `ENV HOME=$HOST_HOME`, and points the npm global prefix there so runtime `npm i -g` has somewhere to land. |
+| `aliases.sh` | One alias: `claude_from_here` that runs Claude as the host UID/GID against the current directory, bind-mounting `~/.claude.json`, `~/.claude/`, the personal-wiki path, and `~/.ssh:ro` from host. |
+
+Build the image with:
+
+```bash
+docker build \
+  --build-arg HOST_HOME="$HOME" \
+  -t claude-sandbox \
+  ~/dev_workspace/dotfiles/claude_sandbox/
+```
+
+`HOST_HOME` is baked in so paths like `installed_plugins.json`'s `installPath` and the octo `wikiHome` config (both host-absolute) resolve identically inside and outside the container. Rebuild if you move to a machine with a different `$HOME`.
 
 The alias shape:
 
 ```bash
 alias claude_from_here='docker run --rm -it \
   -u $(id -u):$(id -g) \
-  -e HOME=/home/me \
-  -e WIKI_HOME="$WIKI_HOME" \
-  -v "$HOME/.claude.json:/home/me/.claude.json" \
-  -v "$HOME/.claude:/home/me/.claude" \
-  -v "$HOME/.ssh:/home/me/.ssh:ro" \
+  -v "$HOME/.claude.json:$HOME/.claude.json" \
+  -v "$HOME/.claude:$HOME/.claude" \
+  -v "$HOME/dev_workspace/personal-wiki:$HOME/dev_workspace/personal-wiki" \
+  -v "$HOME/.ssh:$HOME/.ssh:ro" \
   -v "$(pwd):/mnt/folder" \
   -w /mnt/folder \
   claude-sandbox claude'
@@ -36,12 +46,13 @@ Mounts, line by line:
 
 | Mount | Why |
 |---|---|
-| `$HOME/.claude.json → /home/me/.claude.json` | Auth/credentials, mirrors `gcloud_from_here` convention |
-| `$HOME/.claude → /home/me/.claude` | Config dir: skills, hooks, CLAUDE.md, settings, plugins |
-| `$HOME/.ssh → /home/me/.ssh:ro` | SSH keys for `git pull` / `git push`. See RESEARCH.md "SSH credentials inside the sandbox" |
+| `$HOME/.claude.json → $HOME/.claude.json` | Auth/credentials, mirrors `gcloud_from_here` convention |
+| `$HOME/.claude → $HOME/.claude` | Config dir: skills, hooks, CLAUDE.md, settings, plugins |
+| `$HOME/dev_workspace/personal-wiki → same path` | `wikiHome` (octo plugin userConfig) is configured as a host-absolute path — the SessionStart and Stop hooks read/write `pending.md`, `repos.yml` under this dir |
+| `$HOME/.ssh → $HOME/.ssh:ro` | SSH keys for `git pull` / `git push`. See RESEARCH.md "SSH credentials inside the sandbox" |
 | `$(pwd) → /mnt/folder` | The repo we're working on |
 
-Why `-u $(id -u):$(id -g)` and `HOME=/home/me`: see RESEARCH.md "File ownership" — all files Claude writes must land as the host user, not root.
+Why `-u $(id -u):$(id -g)` and the host-matching HOME: see RESEARCH.md "File ownership" — all files Claude writes must land as the host user, not root.
 
 ### Step-by-step build order
 
@@ -59,7 +70,7 @@ Don't move to Stage 2 until all of these pass.
 
 | # | Criterion | How to test |
 |---|---|---|
-| 1 | Image builds clean | `docker build -t claude-sandbox ~/dev_workspace/dotfiles/claude_sandbox/` exits 0 |
+| 1 | Image builds clean | `docker build --build-arg HOST_HOME="$HOME" -t claude-sandbox ~/dev_workspace/dotfiles/claude_sandbox/` exits 0 |
 | 2 | Alias resolves in a fresh shell | `type claude_from_here` returns the docker run line |
 | 3 | Claude starts inside the container | `claude_from_here` opens the Claude CLI |
 | 4 | Container runs as host UID | Inside: `id -u` matches host `id -u` (e.g. 501) |

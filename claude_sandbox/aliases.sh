@@ -7,24 +7,25 @@
 # one addition: -u $(id -u):$(id -g) so any file Claude writes in the
 # repo lands as the host user, not root. See RESEARCH.md "File ownership".
 #
+# HOME inside the container matches the host HOME (baked into the image
+# via --build-arg HOST_HOME="$HOME"). That keeps host-absolute paths in
+# ~/.claude/plugins/installed_plugins.json and the octo wikiHome config
+# resolving the same way inside and outside the sandbox.
+#
 # Mounts:
-#   $HOME/.claude.json → /home/me/.claude.json    — auth/credentials (HOME-relative lookup)
-#   $HOME/.claude      → /home/me/.claude         — config: skills, hooks, CLAUDE.md, settings, plugins
-#   $HOME/.claude.json → $HOME/.claude.json       — same file, mounted at host path so absolute paths resolve
-#   $HOME/.claude      → $HOME/.claude            — same dir; installed_plugins.json bakes host-absolute installPaths
-#   $HOME/dev_workspace/personal-wiki → same path — wikiHome (octo plugin) is configured as a host-absolute path
-#   $(pwd)             → /mnt/folder              — the repo we're working on
+#   $HOME/.claude.json → $HOME/.claude.json                   — auth/credentials
+#   $HOME/.claude      → $HOME/.claude                        — config: skills, hooks, CLAUDE.md, settings, plugins
+#   $HOME/dev_workspace/personal-wiki → same path             — wikiHome for the octo plugin
+#   $HOME/.ssh         → $HOME/.ssh:ro                        — SSH keys for git
+#   $(pwd)             → /mnt/folder                          — the repo we're working on
 #
 # Container is ephemeral (--rm); everything that needs to persist lives on host.
 alias claude_from_here='docker run --rm -it \
   -u $(id -u):$(id -g) \
-  -e HOME=/home/me \
-  -v "$HOME/.claude.json:/home/me/.claude.json" \
-  -v "$HOME/.claude:/home/me/.claude" \
   -v "$HOME/.claude.json:$HOME/.claude.json" \
   -v "$HOME/.claude:$HOME/.claude" \
   -v "$HOME/dev_workspace/personal-wiki:$HOME/dev_workspace/personal-wiki" \
-  -v "$HOME/.ssh:/home/me/.ssh:ro" \
+  -v "$HOME/.ssh:$HOME/.ssh:ro" \
   -v "$(pwd):/mnt/folder" \
   -w /mnt/folder \
   claude-sandbox claude'

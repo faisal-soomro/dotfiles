@@ -12,7 +12,12 @@ The dotfiles repository for shell customizations.
 Build the Claude sandbox image:
 
 ```bash
-docker build -t claude-sandbox ~/dev_workspace/dotfiles/claude_sandbox/
+docker build \
+  --build-arg HOST_HOME="$HOME" \
+  -t claude-sandbox \
+  ~/dev_workspace/dotfiles/claude_sandbox/
 ```
+
+`HOST_HOME` is baked into the image so host-absolute paths inside `~/.claude/` (plugin install paths, octo `wikiHome`) resolve identically inside the container. Rebuild if you move to a machine with a different `$HOME`.
 
 After that, `claude_from_here` works in any directory.

@@ -7,14 +7,21 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* \
  && npm install -g @anthropic-ai/claude-code
 
+# HOME is baked to match the host HOME so host-absolute paths inside
+# ~/.claude/plugins/installed_plugins.json and the octo wikiHome config
+# resolve identically inside the container — no /home/me indirection.
+# Build with: --build-arg HOST_HOME="$HOME"
+ARG HOST_HOME=/home/me
+
 # World-writable HOME so the container can run as any host UID/GID
 # (see RESEARCH.md "File ownership"). The runtime user has no /etc/passwd
 # entry; tools that call getpwuid() may warn — fix only if it bites.
-RUN mkdir -p /home/me && chmod 777 /home/me
+RUN mkdir -p "$HOST_HOME" && chmod 777 "$HOST_HOME"
 
 # Point npm's global prefix into HOME so runtime `npm i -g` works as
 # a non-root UID without falling back to /usr/local.
-RUN npm config set prefix /home/me/.npm-global --global
-ENV PATH=/home/me/.npm-global/bin:$PATH
+RUN npm config set prefix "$HOST_HOME/.npm-global" --global
+ENV HOME="$HOST_HOME"
+ENV PATH="$HOST_HOME/.npm-global/bin:$PATH"
 
 WORKDIR /mnt/folder
