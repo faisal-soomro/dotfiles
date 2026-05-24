@@ -27,7 +27,6 @@ alias claude_from_here='docker run --rm -it \
   -v "$HOME/.claude.json:/home/me/.claude.json" \
   -v "$HOME/.claude:/home/me/.claude" \
   -v "$HOME/.ssh:/home/me/.ssh:ro" \
-  -v "$HOME/dev_workspace:$HOME/dev_workspace:ro" \
   -v "$(pwd):/mnt/folder" \
   -w /mnt/folder \
   claude-sandbox claude'
@@ -40,7 +39,6 @@ Mounts, line by line:
 | `$HOME/.claude.json → /home/me/.claude.json` | Auth/credentials, mirrors `gcloud_from_here` convention |
 | `$HOME/.claude → /home/me/.claude` | Config dir: skills, hooks, CLAUDE.md, settings, plugins |
 | `$HOME/.ssh → /home/me/.ssh:ro` | SSH keys for `git pull` / `git push`. See RESEARCH.md "SSH credentials inside the sandbox" |
-| `$HOME/dev_workspace → $HOME/dev_workspace:ro` | Resolves absolute-path symlinks inside `~/.claude/` that point at host paths |
 | `$(pwd) → /mnt/folder` | The repo we're working on |
 
 Why `-u $(id -u):$(id -g)` and `HOME=/home/me`: see RESEARCH.md "File ownership" — all files Claude writes must land as the host user, not root.

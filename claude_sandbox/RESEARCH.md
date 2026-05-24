@@ -49,6 +49,8 @@ Implications for the image:
 - Anything Claude wants to `npm i -g` or `pip install` at runtime needs a user-writable prefix — point npm/pip prefixes at the (writable) HOME.
 - Known gotcha: `getpwuid(501)` inside the container returns "unknown user" because no matching `/etc/passwd` entry. Most tools tolerate it; `git` and `ssh` sometimes complain. If it bites, add a startup shim that appends a passwd entry; don't pre-empt it.
 
+**Appendix (2026-05-24): symlink-resolution mount removed.** The alias previously also bind-mounted `$HOME/dev_workspace:ro` so that absolute-path symlinks inside `~/.claude/` (which then pointed into `~/dev_workspace/claude-settings/`) could resolve inside the container. After the home-as-repo migration (`~/.claude/` is now itself a git working tree with real files, no symlinks), that mount is no longer needed and has been removed. See `~/.claude/home-as-repo/RESEARCH.md` for the migration rationale.
+
 ### SSH credentials inside the sandbox
 
 A host-installed SessionStart hook (`wiki-start-hook.sh`) runs `git pull` on session start. Inside the container this immediately fails because (a) `ssh` isn't installed and (b) no SSH credentials are reachable. This isn't a hypothetical — it surfaced the first time we ran the alias in a real repo, so it gets handled in Stage 1, not deferred.

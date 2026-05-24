@@ -10,7 +10,6 @@
 # Mounts:
 #   $HOME/.claude.json → /home/me/.claude.json   — auth/credentials
 #   $HOME/.claude      → /home/me/.claude        — config: skills, hooks, CLAUDE.md, settings, plugins
-#   $HOME/dev_workspace → $HOME/dev_workspace:ro — resolves absolute-path symlinks inside ~/.claude/
 #   $(pwd)             → /mnt/folder             — the repo we're working on
 #
 # Container is ephemeral (--rm); everything that needs to persist lives on host.
@@ -23,7 +22,6 @@ alias claude_from_here='docker run --rm -it \
   -v "$HOME/.claude.json:/home/me/.claude.json" \
   -v "$HOME/.claude:/home/me/.claude" \
   -v "$HOME/.ssh:/home/me/.ssh:ro" \
-  -v "$HOME/dev_workspace:$HOME/dev_workspace:ro" \
   -v "$(pwd):/mnt/folder" \
   -w /mnt/folder \
   claude-sandbox claude'
