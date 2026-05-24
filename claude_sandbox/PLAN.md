@@ -68,19 +68,21 @@ Per the global teaching-walkthrough rule (one file, one step, verify after each)
 
 Don't move to Stage 2 until all of these pass.
 
-| # | Criterion | How to test |
-|---|---|---|
-| 1 | Image builds clean | `docker build --build-arg HOST_HOME="$HOME" -t claude-sandbox ~/dev_workspace/dotfiles/claude_sandbox/` exits 0 |
-| 2 | Alias resolves in a fresh shell | `type claude_from_here` returns the docker run line |
-| 3 | Claude starts inside the container | `claude_from_here` opens the Claude CLI |
-| 4 | Container runs as host UID | Inside: `id -u` matches host `id -u` (e.g. 501) |
-| 5 | Repo files visible inside container | `ls /mnt/folder` shows the host directory contents |
-| 6 | Edits in container appear on host | Touch a file inside; it shows up on host via `ls` |
-| 7 | Host stays clean — no leakage from `pip` | Inside container: `pip install requests`. Outside: `which pip` either reports no host pip touched or a fresh `pip list` on host doesn't show `requests` |
-| 8 | Host stays clean — no leakage from `npm -g` | Inside container: `npm install -g cowsay`. Outside: `which cowsay` returns nothing on host |
-| 9 | Container is gone after exit | `docker ps -a --filter "ancestor=claude-sandbox"` returns no rows |
-| 10 | Files created in container are host-owned | Inside: `touch /mnt/folder/ownership-test`. Outside: `ls -l ownership-test` shows host user, not root |
-| 11 | Auth persists across runs | Run twice; second run skips login (because `~/.claude.json` is bind-mounted from host) |
+| # | Criterion | How to test | Status |
+|---|---|---|---|
+| 1 | Image builds clean | `docker build --build-arg HOST_HOME="$HOME" -t claude-sandbox ~/dev_workspace/dotfiles/claude_sandbox/` exits 0 | ✅ |
+| 2 | Alias resolves in a fresh shell | `type claude_from_here` returns the docker run line | ✅ |
+| 3 | Claude starts inside the container | `claude_from_here` opens the Claude CLI | ✅ |
+| 4 | Container runs as host UID | Inside: `id -u` matches host `id -u` (e.g. 501) | ✅ |
+| 5 | Repo files visible inside container | `ls /mnt/folder` shows the host directory contents | ✅ |
+| 6 | Edits in container appear on host | Touch a file inside; it shows up on host via `ls` | ✅ |
+| 7 | Host stays clean — no leakage from `pip` | Inside container: `pip install requests`. Outside: `which pip` either reports no host pip touched or a fresh `pip list` on host doesn't show `requests` | ✅ |
+| 8 | Host stays clean — no leakage from `npm -g` | Inside container: `npm install -g cowsay`. Outside: `which cowsay` returns nothing on host | ✅ |
+| 9 | Container is gone after exit | `docker ps -a --filter "ancestor=claude-sandbox"` returns no rows | ✅ |
+| 10 | Files created in container are host-owned | Inside: `touch /mnt/folder/ownership-test`. Outside: `ls -l ownership-test` shows host user, not root | ✅ |
+| 11 | Auth persists across runs | Run twice; second run skips login (because `~/.claude.json` is bind-mounted from host) | ✅ |
+
+**Stage 1 DONE** (2026-05-24).
 
 If any of #5-#11 fail we stop and fix before continuing.
 
@@ -106,13 +108,14 @@ Template shape (subject to refinement during Stage 2):
   "workspaceFolder": "/mnt/folder",
   "workspaceMount": "source=${localWorkspaceFolder},target=/mnt/folder,type=bind",
   "mounts": [
-    "source=${localEnv:HOME}/.claude.json,target=/home/me/.claude.json,type=bind",
-    "source=${localEnv:HOME}/.claude,target=/home/me/.claude,type=bind"
+    "source=${localEnv:HOME}/.claude.json,target=${localEnv:HOME}/.claude.json,type=bind",
+    "source=${localEnv:HOME}/.claude,target=${localEnv:HOME}/.claude,type=bind"
   ],
-  "containerEnv": { "HOME": "/home/me" },
   "updateRemoteUserUID": true
 }
 ```
+
+(HOME is baked into the image at build time via `--build-arg HOST_HOME="$HOME"` — see Stage 1 Build — so no `containerEnv` override is needed and the bind targets mirror the host paths.)
 
 ### Step-by-step build order
 
