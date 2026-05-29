@@ -15,6 +15,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   Single line; no body unless the change needs rationale.
 - Never commit unless explicitly asked. Never push, force-push, or run destructive
   git commands without an explicit instruction.
+- **Author identity**: this is a personal repo. Commit as
+  `faisal-soomro <h.faisalsoomro@gmail.com>`, not the machine's work identity.
+  The machine's `git config` defaults to the work email — do **not** trust it; check
+  `git log` for the repo's actual convention before committing. Override per-commit
+  with `git -c user.name=… -c user.email=… commit …` (never modify `git config`).
 
 ## What this repo is
 
