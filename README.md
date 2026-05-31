@@ -64,6 +64,6 @@ docker build \
   ~/dev_workspace/dotfiles/claude_sandbox/
 ```
 
-`HOST_HOME` is baked into the image so host-absolute paths inside `~/.claude/` (plugin install paths, octo `wikiHome`) resolve identically inside the container. Rebuild if you move to a machine with a different `$HOME`.
+`HOST_HOME` is baked into the image so the host-absolute `installPath` field inside `~/.claude/plugins/installed_plugins.json` resolves identically inside the container. Rebuild if you move to a machine with a different `$HOME`. (Wiki paths under `/Users/Shared/wikis/` are mounted same-path and don't depend on `HOST_HOME`. `/opt` was avoided because OrbStack injects its own dirs there and silently blanks bind-mount contents.)
 
 After that, `claude_from_here` works in any directory.

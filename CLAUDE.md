@@ -49,10 +49,13 @@ claude_from_here   # runs Claude in claude-sandbox against $(pwd)
 These are decisions with non-obvious rationale (full detail in `claude_sandbox/RESEARCH.md`). Do not
 undo them without understanding why they exist:
 
-- **`HOST_HOME` is baked into `ENV HOME`.** Host-absolute paths inside `~/.claude/` —
-  `plugins/installed_plugins.json` `installPath` and the octo plugin's `wikiHome` — must resolve to
-  the *same* path inside and outside the container. No `/home/me` indirection, no `CLAUDE_CONFIG_DIR`
-  redirect. This is why HOME is a build arg, not a fixed path.
+- **`HOST_HOME` is baked into `ENV HOME`.** The host-absolute `installPath` field inside
+  `~/.claude/plugins/installed_plugins.json` must resolve to the *same* path inside and outside the
+  container. No `/home/me` indirection, no `CLAUDE_CONFIG_DIR` redirect. This is why HOME is a build
+  arg, not a fixed path. (Wiki paths live under `/Users/Shared/wikis/`, mounted same-path — they don't
+  depend on `HOST_HOME`; the `claude_from_here` function only adds each wiki `-v` flag when the dir
+  exists on host. `/opt` was tried first but OrbStack silently blanks bind-mount content under that
+  path.)
 - **Container runs as host UID/GID** (`-u $(id -u):$(id -g)`). Claude writes constantly into the cwd;
   running as root would leave host files owned by `root:root`. Consequence: the image has no baked-in
   user account, HOME is `chmod 777` so any UID can use it, and the npm global prefix points into HOME

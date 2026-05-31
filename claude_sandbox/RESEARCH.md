@@ -44,7 +44,7 @@ Three shapes considered:
 **Decision: option 1.** All container-created files must land as the host user. That's the user's hard requirement.
 
 Implications for the image:
-- No baked-in user account with a fixed UID. Create a world-writable HOME (`chmod 777`) at the host HOME path (passed in via `--build-arg HOST_HOME="$HOME"`) so any runtime UID can use it, and so host-absolute paths baked into `~/.claude/plugins/installed_plugins.json` and the octo `wikiHome` config resolve identically inside the container.
+- No baked-in user account with a fixed UID. Create a world-writable HOME (`chmod 777`) at the host HOME path (passed in via `--build-arg HOST_HOME="$HOME"`) so any runtime UID can use it, and so the host-absolute `installPath` field in `~/.claude/plugins/installed_plugins.json` resolves identically inside the container. (Wiki paths live under `/Users/Shared/wikis/`, mounted same-path — no HOST_HOME dependency. `/opt` was avoided because OrbStack injects its own dirs there and silently blanks bind-mount contents.)
 - Install `claude` globally (e.g. into `/usr/local` via `npm i -g`) so it's on PATH regardless of runtime UID.
 - Anything Claude wants to `npm i -g` or `pip install` at runtime needs a user-writable prefix — point npm/pip prefixes at the (writable) HOME.
 - Known gotcha: `getpwuid(501)` inside the container returns "unknown user" because no matching `/etc/passwd` entry. Most tools tolerate it; `git` and `ssh` sometimes complain. If it bites, add a startup shim that appends a passwd entry; don't pre-empt it.

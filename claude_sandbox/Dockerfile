@@ -7,9 +7,10 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* \
  && npm install -g @anthropic-ai/claude-code
 
-# HOME is baked to match the host HOME so host-absolute paths inside
-# ~/.claude/plugins/installed_plugins.json and the octo wikiHome config
-# resolve identically inside the container — no /home/me indirection.
+# HOME is baked to match the host HOME so the host-absolute installPath
+# inside ~/.claude/plugins/installed_plugins.json resolves identically
+# inside the container — no /home/me indirection. (Wiki paths under
+# /Users/Shared/wikis/ are mounted same-path and don't depend on HOST_HOME.)
 # Build with: --build-arg HOST_HOME="$HOME"
 ARG HOST_HOME=/home/me
 

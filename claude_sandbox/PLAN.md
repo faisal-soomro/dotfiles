@@ -15,7 +15,7 @@ Smallest viable sandbox. A Dockerfile and a single bash alias. No CLI wrapper.
 | File | Purpose |
 |---|---|
 | `Dockerfile` | Ubuntu base + node + `@anthropic-ai/claude-code` + `openssh-client` + `jq`. **No baked-in user.** Takes a `HOST_HOME` build arg, creates that path as a world-writable HOME, sets `ENV HOME=$HOST_HOME`, and points the npm global prefix there so runtime `npm i -g` has somewhere to land. |
-| `aliases.sh` | One alias: `claude_from_here` that runs Claude as the host UID/GID against the current directory, bind-mounting `~/.claude.json`, `~/.claude/`, the personal-wiki path, and `~/.ssh:ro` from host. |
+| `aliases.sh` | Defines `claude_from_here`: runs Claude as the host UID/GID against the current directory, bind-mounting `~/.claude.json`, `~/.claude/`, `~/.ssh:ro`, and any `/Users/Shared/wikis/*` dirs that exist on the host. |
 
 Build the image with:
 
@@ -26,20 +26,25 @@ docker build \
   ~/dev_workspace/dotfiles/claude_sandbox/
 ```
 
-`HOST_HOME` is baked in so paths like `installed_plugins.json`'s `installPath` and the octo `wikiHome` config (both host-absolute) resolve identically inside and outside the container. Rebuild if you move to a machine with a different `$HOME`.
+`HOST_HOME` is baked in so the host-absolute `installPath` field inside `~/.claude/plugins/installed_plugins.json` (under `$HOME`) resolves identically inside and outside the container. Rebuild if you move to a machine with a different `$HOME`. Wiki paths under `/Users/Shared/wikis/` don't need the bake — they're same-path mounts. (`/opt` was tried first but OrbStack silently blanks bind-mount content under that path.)
 
-The alias shape:
+The function shape (an alias can't conditionally include `-v` flags):
 
 ```bash
-alias claude_from_here='docker run --rm -it \
-  -u $(id -u):$(id -g) \
-  -v "$HOME/.claude.json:$HOME/.claude.json" \
-  -v "$HOME/.claude:$HOME/.claude" \
-  -v "$HOME/dev_workspace/personal-wiki:$HOME/dev_workspace/personal-wiki" \
-  -v "$HOME/.ssh:$HOME/.ssh:ro" \
-  -v "$(pwd):/mnt/folder" \
-  -w /mnt/folder \
-  claude-sandbox claude'
+claude_from_here() {
+    local args=(
+        --rm -it
+        -u "$(id -u):$(id -g)"
+        -v "$HOME/.claude.json:$HOME/.claude.json"
+        -v "$HOME/.claude:$HOME/.claude"
+        -v "$HOME/.ssh:$HOME/.ssh:ro"
+        -v "$(pwd):/mnt/folder"
+        -w /mnt/folder
+    )
+    [ -d /Users/Shared/wikis/personal-wiki ] && args+=(-v /Users/Shared/wikis/personal-wiki:/Users/Shared/wikis/personal-wiki)
+    [ -d /Users/Shared/wikis/catenda-wiki ]  && args+=(-v /Users/Shared/wikis/catenda-wiki:/Users/Shared/wikis/catenda-wiki)
+    docker run "${args[@]}" claude-sandbox claude
+}
 ```
 
 Mounts, line by line:
@@ -48,7 +53,8 @@ Mounts, line by line:
 |---|---|
 | `$HOME/.claude.json → $HOME/.claude.json` | Auth/credentials, mirrors `gcloud_from_here` convention |
 | `$HOME/.claude → $HOME/.claude` | Config dir: skills, hooks, CLAUDE.md, settings, plugins |
-| `$HOME/dev_workspace/personal-wiki → same path` | `wikiHome` (octo plugin userConfig) is configured as a host-absolute path — the SessionStart and Stop hooks read/write `pending.md`, `repos.yml` under this dir |
+| `/Users/Shared/wikis/personal-wiki → same path` (conditional) | `wikiHome` for the octo plugin — `SessionStart`/`Stop` hooks read/write `pending.md`, `repos.yml` under this dir. Mounted only when the dir exists on host. |
+| `/Users/Shared/wikis/catenda-wiki → same path` (conditional) | `wikiHome` for the catenda plugin. Mounted only when the dir exists on host. |
 | `$HOME/.ssh → $HOME/.ssh:ro` | SSH keys for `git pull` / `git push`. See RESEARCH.md "SSH credentials inside the sandbox" |
 | `$(pwd) → /mnt/folder` | The repo we're working on |
 
@@ -120,7 +126,7 @@ The Stage 1 alias is mostly portable already. Three things differ from "personal
 
 | Item | Action for team |
 |---|---|
-| `~/dev_workspace/personal-wiki` mount | Remove from the team `aliases.sh`. Devs who use octo/wiki can re-add locally in their own dotfiles fork. |
+| Wiki mounts (`/Users/Shared/wikis/personal-wiki`, `/Users/Shared/wikis/catenda-wiki`) | Already conditional via `[ -d … ]` guards in the Stage 1 function. Hosts without those dirs simply get no mount — no per-dev edit needed. |
 | `~/.ssh:ro` mount | Keep, but document it explicitly. Anthropic warns against it; each dev should accept the trade-off knowingly. Provide a commented-out variant for opt-out. |
 | `HOST_HOME` default | Make `docker build` fail loudly when `--build-arg HOST_HOME` is missing — no silent fall-back to `/home/me`. |
 
@@ -134,9 +140,8 @@ git clone <catenda-dotfiles-url> ~/dev_workspace/dotfiles
 docker build --build-arg HOST_HOME="$HOME" \
   -t claude-sandbox ~/dev_workspace/dotfiles/claude_sandbox/
 
-# 3. Source the alias from your shell rc (~/.zshrc or ~/.bashrc)
-echo '[ -f "$HOME/dev_workspace/dotfiles/claude_sandbox/aliases.sh" ] && \
-  source "$HOME/dev_workspace/dotfiles/claude_sandbox/aliases.sh"' >> ~/.zshrc
+# 3. Source the dotfiles entrypoint from your shell rc (~/.zshrc or ~/.bashrc)
+echo 'source "$HOME/dev_workspace/dotfiles/index.sh"' >> ~/.zshrc
 
 # 4. Reload the shell
 exec zsh -l
@@ -189,7 +194,7 @@ Per-IDE setup:
 
 | # | Criterion | How to test | Status |
 |---|---|---|---|
-| 1 | Team alias drops the `personal-wiki` mount | `aliases.sh` (team copy) contains no `dev_workspace/personal-wiki` line | ⬜ |
+| 1 | Wiki mounts skip cleanly on hosts without the dir | On a host without `/Users/Shared/wikis/personal-wiki`, `claude_from_here` runs with no `-v /Users/Shared/wikis/personal-wiki:…` flag and creates no root-owned empty dir | ⬜ |
 | 2 | Team alias build fails loudly without `HOST_HOME` | `docker build .` (no `--build-arg`) → error referencing `HOST_HOME` | ⬜ |
 | 3 | Devcontainer reference builds clean | **Dev Containers: Rebuild Container** in `trading-journal` exits 0 | ⬜ |
 | 4 | `claude` works in VS Code integrated terminal of devcontainer | `claude --version` returns version inside the container | ⬜ |
@@ -205,7 +210,7 @@ Per-IDE setup:
 
 Order is roughly the order in which we expect a real need to surface. None of these is being built proactively.
 
-1. **PATH wiring** — ~~extend `claude-settings/install.sh`~~ done: `dotfiles/bashrc` sources `aliases.sh` automatically. Multi-machine bootstrap (cloning dotfiles + linking bashrc into `$HOME`) is a separate dotfiles-repo follow-up.
+1. **PATH wiring** — done: `dotfiles/index.sh` sources `claude_sandbox/aliases.sh` via `shell/common.sh` (only when `docker` is on PATH). Multi-machine bootstrap (cloning dotfiles + sourcing `index.sh` from `~/.bashrc` / `~/.zshrc`) is a separate dotfiles follow-up.
 2. **Session sync for `/insights`** — `docker cp` per-container `~/.claude/projects/` → host `~/.claude/projects/`. Trigger: first time we run Ralph and want host-side `/insights` to see those sessions.
 3. **SSH usable inside the sandbox (push/pull from container)** — Stage 1 currently installs `openssh-client` and bind-mounts `~/.ssh:ro`, which is enough that `ssh` is *present*, but it still fails with `No user exists for uid 501` because the runtime UID has no `/etc/passwd` entry (the `getpwuid` gotcha called out in RESEARCH.md). Fix is the standard entrypoint pattern: `chmod 666 /etc/passwd /etc/group` at build, plus an entrypoint script that appends an entry for the runtime UID. Also mount `~/.gitconfig:ro` so repos without local-config user.name/email can still commit. **Deferred by design**: sandbox is commit-only for now; pull/push happen on host. Trigger to revisit: first time the sandbox-only flow gets annoying (e.g. running Ralph and needing to push from inside).
 4. **`destroy` / volume teardown** — convenient flag for nuking a stale container or the auth volume. Trigger: enough clutter to bother us.
@@ -213,7 +218,7 @@ Order is roughly the order in which we expect a real need to surface. None of th
 6. **Per-repo `.devcontainer/` overrides** — repo-specific `Dockerfile` extensions for Java JDK pin (trading-framework), CUDA + Ollama bridge (local-ai-lab). Trigger: these repos surface concrete needs.
 7. **`--dangerously-skip-permissions` + firewall** — `init-firewall.sh` (iptables egress restriction) + AFK-mode toggle. Trigger: first time we want to actually go AFK with Ralph.
 8. **MCP servers inside the container** — `.mcp.json` per-repo or baked into the image. Trigger: a workflow that genuinely needs MCP inside the sandbox.
-9. **Wiki page** — `personal-wiki/wiki/ai/claude-code-sandboxing.md` once the pattern is stable. Trigger: Stage 2 done and used for a week.
+9. **Wiki page** — `/Users/Shared/wikis/personal-wiki/wiki/ai/claude-code-sandboxing.md` once the pattern is stable. Trigger: Stage 2 done and used for a week.
 
 ---
 
