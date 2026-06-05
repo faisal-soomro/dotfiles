@@ -25,7 +25,12 @@ RUN mkdir -p "$HOST_HOME" && chmod 777 "$HOST_HOME"
 # Point npm's global prefix into HOME so runtime `npm i -g` works as
 # a non-root UID without falling back to /usr/local.
 RUN npm config set prefix "$HOST_HOME/.npm-global" --global
+# Claude Code self-check expects a real binary at ~/.local/bin/claude (not an
+# npm shim). Run `claude install` at build time so it copies the standalone
+# binary to that path and the /doctor warning never fires.
+RUN mkdir -p "$HOST_HOME/.local/bin" \
+ && HOME="$HOST_HOME" claude install
 ENV HOME="$HOST_HOME"
-ENV PATH="$HOST_HOME/.npm-global/bin:$PATH"
+ENV PATH="$HOST_HOME/.npm-global/bin:$HOST_HOME/.local/bin:$PATH"
 
 WORKDIR /mnt/folder
