@@ -23,9 +23,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-Personal dotfiles: shell config (`bashrc`, `bash_profile`) plus `claude_sandbox/`, a Dockerized
-Claude Code environment. There is no build system, test suite, or application code — changes are
-shell scripts, a Dockerfile, and design docs.
+Personal dotfiles: shell config (`bashrc`, `bash_profile`) plus `claude_sandbox/` and `pi_sandbox/`,
+Dockerized environments for Claude Code and pi-coding-agent respectively. There is no build system,
+test suite, or application code — changes are shell scripts, Dockerfiles, and design docs.
 
 ## claude_sandbox
 
@@ -70,6 +70,40 @@ undo them without understanding why they exist:
 
 `RESEARCH.md` is pure rationale (options compared, decisions taken). `PLAN.md` tracks current state
 and the deferred queue. Keep that split: rationale in RESEARCH, state/timeline in PLAN.
+
+## pi_sandbox
+
+Symmetric sibling of `claude_sandbox/` for [pi-coding-agent](https://github.com/earendil-works/pi-coding-agent)
+(`@earendil-works/pi-coding-agent` on npm, terminal command `pi`). Same isolation envelope (host UID, HOST_HOME
+bake, same-path cwd mount, conditional wikis), independent image, different mount surface.
+
+Build the image:
+
+```bash
+docker build --build-arg HOST_HOME="$HOME" -t pi-sandbox ~/dev_workspace/dotfiles/pi_sandbox/
+```
+
+Run it (alias defined in `pi_sandbox/aliases.sh`):
+
+```bash
+pi_from_here   # runs pi in pi-sandbox against $(pwd)
+```
+
+### Load-bearing design constraints (pi-specific deltas)
+
+Inherits everything from `claude_sandbox/` above. Pi-specific deltas worth flagging here (full
+rationale in `pi_sandbox/RESEARCH.md` and personal-wiki Phase 2 D-block D1–D8):
+
+- **No `~/.claude` mount.** Pi's skills are curated separately in host's `~/.pi/agent/skills/` and
+  carried via the existing `~/.pi` mount. Don't add a `~/.claude` mount "for parity" — the decoupling
+  is intentional (D5).
+- **No `~/.pi.json` mount.** Pi has no top-level config file analog to `~/.claude.json`; all pi
+  state lives under `~/.pi/agent/`.
+- **Host-side prereqs** for the sandbox to be useful: `~/.pi/agent/settings.json` `skills` pointer at
+  `~/.pi/agent/skills/`, that directory populated, and `/octo-setup` run once so the octo-pi-extension
+  has its `wikiHome`. See `pi_sandbox/PLAN.md` "Host-side prereqs".
+- **`pi_coding` warmup wrapper does NOT live here yet** — deferred to Phase 3 of the shaheen-pi-agentic
+  PAVE (it consumes the Caddy `llama.home:8080` route built there). Don't pre-add it.
 
 ## Shell config
 

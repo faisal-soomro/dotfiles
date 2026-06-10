@@ -109,6 +109,7 @@ These are the only open questions left after the grill. None blocks scaffolding.
 | 1 | Does pi tilde-expand `~/.pi/agent/skills` in settings.json? | If not, switch host's settings.json to absolute `$HOME/.pi/agent/skills`. Same path inside container because of HOST_HOME bake. |
 | 2 | Does pi need a build-time `pi install` analog to claude's? | If `pi /doctor` complains on first sandbox launch, add the step to the Dockerfile and rebuild. |
 | 3 | Does `ctx.cwd` on Phase 1's `turn_end` populate correctly inside the sandbox under same-path cwd mount? | If not, debug Phase 1 extension's cwd resolution (Phase 1 D4 verify-at-execute note carried forward). |
+| 4 | Sandbox pi version vs host pi version drift (sandbox built 2026-06-10 ships `0.74.2`; host `settings.json` shows `lastChangelogVersion: 0.78.1`) | Identify the source of host pi (different channel? manual install?) and either pin the npm install line to a tag or accept the drift if cross-host behavior matches. |
 
 ---
 

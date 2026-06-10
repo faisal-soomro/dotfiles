@@ -22,9 +22,12 @@ if command -v docker >/dev/null 2>&1; then
 
     # claude_from_here — see claude_sandbox/RESEARCH.md
     [ -f "$HOME/dev_workspace/dotfiles/claude_sandbox/aliases.sh" ] && source "$HOME/dev_workspace/dotfiles/claude_sandbox/aliases.sh"
+
+    # pi_from_here — see pi_sandbox/RESEARCH.md
+    [ -f "$HOME/dev_workspace/dotfiles/pi_sandbox/aliases.sh" ] && source "$HOME/dev_workspace/dotfiles/pi_sandbox/aliases.sh"
 else
     _stub_missing docker \
         alpine_from_here kali_from_here go_from_here python3_from_here \
         gcloud_from_here terraform_from_here aws_from_here prowler_from_here \
-        docker_from_here claude_from_here
+        docker_from_here claude_from_here pi_from_here
 fi
