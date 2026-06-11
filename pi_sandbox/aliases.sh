@@ -60,3 +60,30 @@ pi_from_here() {
     done
     docker run "${args[@]}" pi-sandbox pi "$@"
 }
+
+# Convenience wrapper over pi_from_here that warms the llama-server preset
+# before the sandbox opens. Per Phase 3 sub-task 3h (shaheen-pi-agentic
+# PAVE): the router takes 3-10s+ to swap heavy MoE primaries, so this
+# fires a one-token request in the background while the sandbox spins up.
+# By the time the user types their first prompt the model is hot.
+#
+# Defaults to the fleet primary (gemma4-26b-a4b — Gemma 4 26B-A4B QAT).
+# Override per session: `pi_coding qwen3.6-35b-a3b` (for coding) or
+# `pi_coding nemotron-30b-a3b` (reasoning).
+#
+# Warmup is silent and best-effort — if llama.home is down or the preset
+# name is wrong, pi launches anyway and the first real prompt eats the
+# load cost. No retries, no error handling beyond the 5s curl timeout.
+pi_coding() {
+    local model
+    if [ "$#" -gt 0 ]; then
+        model="$1"; shift
+    else
+        model="gemma4-26b-a4b"
+    fi
+    curl -s -m 5 -X POST "http://llama.home/v1/chat/completions" \
+        -H 'Content-Type: application/json' \
+        -d "{\"model\":\"$model\",\"messages\":[{\"role\":\"user\",\"content\":\"warmup\"}],\"max_tokens\":1}" \
+        >/dev/null 2>&1 &
+    pi_from_here --provider llama-shaheen --model "$model" "$@"
+}
